@@ -1,0 +1,8 @@
+node_modules
+*.wallet
+*.address
+.idea
+.vscode
+*.log
+build
+todo

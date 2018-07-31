@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Dosh Wallet</title>
+    <link href="assets/css/global.css" rel="stylesheet">
+    <link href="assets/css/photon.min.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="main-container">
+
+    <div class="app-sidebar">
+        <h1>Dosh</h1>
+        <p>
+            <span class="small-label"><span class="icon icon-network"></span> Wallet address</span><br>
+            <span id="walletAddress" style="word-break: break-all">N/A</span>
+            <span id="copyWalletAddress" class="text-btn text-btn-small">COPY</span>
+        </p>
+        <p>
+            <span class="small-label"><span class="icon icon-credit-card"></span> Available Balance</span><br>
+            <span id="walletBalanceAvail">N/A</span><br>
+            <span class="small-label"><span class="icon icon-lock"></span> Locked</span><br>
+            <span id="walletBalanceLocked">N/A</span>
+            <br>
+            <span id="refreshBalance" class="text-btn text-btn-small">Refresh</span>
+        </p>
+        <p>
+            <button id="openWalletBtn" class="btn btn-positive">Open Wallet</button>
+            <button id="closeWalletBtn" class="btn btn-negative" disabled>Close Wallet</button>
+        </p>
+        <p>
+            <button id="generateWalletBtn" class="btn btn-warning">Generate Wallet</button>
+        </p>
+    </div>
+
+    <input class='hide' type="radio" id="tab-1" name="tractor" checked='checked'/>
+    <label for='tab-1' class="label-tab">Send</label>
+
+    <article class='tab-1' id="tab-send">
+        <form id="sendForm">
+            <div class="form-group">
+                <label for="destinationAddress">Recipient Address <span class="red">*</span></label>
+                <input type="text" class="form-control" id="destinationAddress" required placeholder="X....">
+            </div>
+            <div class="form-group">
+                <label for="transactionAmount">Amount <span class="red">*</span></label>
+                <input type="number" class="form-control" id="transactionAmount" required value="0" min="0">
+            </div>
+            <div class="form-group">
+                <label for="paymentId">Payment ID</label>
+                <input type="text" class="form-control" id="paymentId" maxlength="64" minlength="64">
+            </div>
+            <div class="form-group">
+                <label for="mixin">Anonymity/Mixin <span class="red">*</span></label>
+                <input type="number" class="form-control" id="mixin" required value="0" min="0">
+            </div>
+            <div class="form-group">
+                <label for="transactionFee">Fee <span class="red">*</span></label>
+                <input type="number" class="form-control" id="transactionFee" required value="0.000001" placeholder="0.000001">
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-large btn-positive">Send</button>
+                <button type="reset" class="btn btn-large btn-negative">Reset</button>
+            </div>
+            <div>
+                <span id="sendError"></span>
+                <span id="sendMessage"></span>
+            </div>
+        </form>
+    </article>
+
+    <input class='hide' type="radio" id="tab-2" name="tractor"/>
+    <label for='tab-2' class="label-tab">Transactions</label>
+
+    <article class='tab-2' id="tab-transactions">
+        <div class="transactions-top">
+            <div class="transactions-header"><b>Transactions</b></div>
+            <div class="transactions-actions">
+                <span class="text-btn" id="refreshTransactions">Refresh</span>
+            </div>
+        </div>
+        <table id="transactionsTable">
+            <thead>
+            <tr>
+                <th>Date</th>
+                <th>Block</th>
+                <th>Amount</th>
+                <th>Fee</th>
+                <th>TX Hash</th>
+            </tr>
+            </thead>
+            <tbody id="transactionsTableBody">
+
+            </tbody>
+        </table>
+    </article>
+
+    <input class='hide' type="radio" id="tab-3" name="tractor"/>
+    <label for='tab-3' class="label-tab">Logs</label>
+
+    <article class='tab-3' id="tab-logs">
+        <div>
+            <label for="daemonConsole">Daemon Logs:</label>
+            <textarea style="width: 100%; height: 240px" readonly id="daemonConsole"></textarea>
+        </div>
+    </article>
+</div>
+
+<script>
+    // Init
+    const electron = require('electron');
+    const {ipcRenderer, clipboard} = electron;
+
+    const daemonConsole = document.querySelector('#daemonConsole');
+
+    const sendMessage = document.querySelector("#sendMessage");
+    const sendError = document.querySelector("#sendError");
+
+    let walletOpen = false;
+
+    const noOpenWalletMsg = 'No open wallet.';
+
+    // UI Interactions
+    const copyWalletAddressBtn = document.querySelector("#copyWalletAddress");
+    copyWalletAddressBtn.addEventListener('click', () => {
+        clipboard.writeText(document.querySelector('#walletAddress').textContent)
+    });
+
+    const refreshBalanceBtn = document.querySelector("#refreshBalance");
+    refreshBalanceBtn.addEventListener('click', () => {
+        if (!walletOpen) {
+            alert(noOpenWalletMsg);
+            return;
+        }
+        ipcRenderer.send('wallet:refreshBalance');
+    });
+
+    // Events Out
+    const sendForm = document.querySelector('#sendForm');
+    sendForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (!walletOpen) {
+            alert(noOpenWalletMsg);
+            return;
+        }
+        ipcRenderer.send('wallet:transfer', {
+            destinationAddress: document.querySelector("#destinationAddress").value,
+            amount: Number.parseFloat(document.querySelector("#transactionAmount").value) * 1000000000000,
+            paymentId: document.querySelector("#paymentId").value,
+            mixin: Number.parseFloat(document.querySelector("#mixin").value),
+            transactionFee: Number.parseFloat(document.querySelector("#transactionFee").value) * 1000000000000,
+        });
+    });
+
+    sendForm.addEventListener('reset', () => {
+        sendForm.reset();
+    });
+
+    const refreshTransactionsBtn = document.querySelector("#refreshTransactions");
+    refreshTransactionsBtn.addEventListener('click', () => {
+        if (!walletOpen) {
+            alert(noOpenWalletMsg);
+            return;
+        }
+        ipcRenderer.send('wallet:getTransactions');
+    });
+
+    const openWalletBtn = document.querySelector("#openWalletBtn");
+    const closeWalletBtn = document.querySelector("#closeWalletBtn");
+    const generateWalletBtn = document.querySelector("#generateWalletBtn");
+
+    openWalletBtn.addEventListener('click', () => {
+        if (walletOpen) {
+            alert('Wallet already open.');
+            return;
+        }
+        ipcRenderer.send('wallet:actionOpen');
+    });
+
+    closeWalletBtn.addEventListener('click', () => {
+        if (!walletOpen) {
+            alert(noOpenWalletMsg);
+            return;
+        }
+        ipcRenderer.send('wallet:actionClose');
+    });
+
+    generateWalletBtn.addEventListener('click', () => {
+        ipcRenderer.send('wallet:actionGenerate');
+    });
+
+    // Events In
+    ipcRenderer.on('daemonUpdate', (event, data) => {
+        console.log('got daemon update: ' + data.message);
+        daemonConsole.value += data.message;
+        daemonConsole.scrollTop = daemonConsole.scrollHeight;
+    });
+
+    const walletAddress = document.querySelector('#walletAddress');
+    ipcRenderer.on('walletAddress', (event, data) => {
+        walletAddress.textContent = data.address;
+    });
+
+    const walletBalanceAvail = document.querySelector('#walletBalanceAvail');
+    const walletBalanceLocked = document.querySelector('#walletBalanceLocked');
+    ipcRenderer.on('walletBalance', (event, data) => {
+        let available = Number.parseFloat(data.available / 1000000000000).toFixed(12);
+        let locked = Number.parseFloat(data.locked / 1000000000000).toFixed(12);
+        walletBalanceAvail.textContent = available;
+        walletBalanceLocked.textContent = locked;
+    });
+
+    ipcRenderer.on('walletSendSuccess', (event, data) => {
+        sendMessage.textContent = data.message;
+        sendError.textContent = "";
+        sendForm.reset();
+    });
+
+    ipcRenderer.on('walletSendError', (event, data) => {
+        sendMessage.textContent = "";
+        sendError.textContent = data.message;
+    });
+
+    ipcRenderer.on('walletOpened', () => {
+        walletOpen = true;
+        openWalletBtn.disabled = true;
+        closeWalletBtn.disabled = false;
+    });
+
+    ipcRenderer.on('walletClosed', () => {
+        walletOpen = false;
+        openWalletBtn.disabled = false;
+        closeWalletBtn.disabled = true;
+        transactionsTableBody.innerHTML = "";
+        sendForm.reset();
+        sendMessage.textContent = "";
+        sendError.textContent = "";
+        walletBalanceAvail.textContent = "N/A";
+        walletBalanceLocked.textContent = "N/A";
+        walletAddress.textContent = "N/A"
+    });
+
+    let transactionsTableBody = document.querySelector("#transactionsTableBody");
+
+    ipcRenderer.on('walletGetTransfers', (event, data) => {
+        transactionsTableBody.innerHTML = "";
+        data.forEach((trans) => {
+            let row = transactionsTableBody.insertRow();
+            let date = row.insertCell(0);
+            let block = row.insertCell(1);
+            let amount = row.insertCell(2);
+            let fee = row.insertCell(3);
+            let txhash = row.insertCell(4);
+
+            // date.textContent = trans.time;
+            date.textContent = new Date(trans.time * 1000).toLocaleString();
+            block.textContent = trans.blockIndex;
+            amount.textContent = Number.parseFloat(trans.amount / 1000000000000).toFixed(12);
+            fee.textContent = Number.parseFloat(trans.fee / 1000000000000).toFixed(12);
+            txhash.textContent = trans.transactionHash.substring(0, 12) + "...";
+        });
+    });
+
+</script>
+</body>
+</html>
